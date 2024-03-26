@@ -29,10 +29,13 @@
 LOG_FILE="ldap_user_add.log"
 
 # Create file to store users
-touch users.ldif
+touch users.$$.ldif
 
 # Filename parse in command line
 FILENAME=$1
+
+# User list already in LDAP
+LDAP_USERS=$(slapcat | grep '\dn: uid=*')
 
 # Catch LDAP password as variable
 read -p "LDAP Password: " -s LDAPPASS
@@ -48,14 +51,14 @@ ROLES_GROUP="ou=ivr,ou=roles,o=ACC,o=Altar"
 if [ ! -f "$FILENAME" ]; then
     echo -e "\nError: User file $FILENAME not found, aborting operation"
     echo "$(date +"%Y-%m-%d %H:%M:%S") - Error: User file $FILENAME not found, aborting operation" >> "$LOG_FILE"
-    break
+    exit 1
 fi
 
 #Function to create a file with group to modify
 function catch_role {
 
         local role_name=$1
-        local filename=group.ldif
+        local filename=group.$$.ldif
         local option=$2
 
 ldapsearch -x -LLL -w "$LDAPPASS" -D $BIND_DN -b cn=$role_name,$ROLES_GROUP > $filename
@@ -75,34 +78,19 @@ rm -f $filename
 }
 
 #Create file for adding users with admin role
-catch_role "Administrator" "add" > adm_role.ldif
+catch_role "Administrator" "add" > adm_role.$$.ldif
 
 #Create file for adding users with supervisor role
-catch_role "Supervisor" "add" > sv_role.ldif
+catch_role "Supervisor" "add" > sv_role.$$.ldif
 
 #Create file for adding users with agent role
-catch_role "Agent" "add" > ag_role.ldif
+catch_role "Agent" "add" > ag_role.$$.ldif
 
 # Calculate date
 CHANGE_DATE=$(echo "$(date +%s) / ( 60 * 60 * 24 )" | bc)
 
 # Timestamp
 TIMESTAMP=$(date +%Y%m%d%H%M%SZ)
-
-# Fumction to check if user exists in LDAP
-function user_in_ldap {
-        local username=$1
-        ldapsearch -x -LLL -w $LDAPPASS -D $BIND_DN -b $ORGANIZATION uid=$username > temp_file.ldif 2>&1
-
-        if [ -s temp_file.ldif ]; then
-        rm -f temp_file.ldif
-                return 1
-        else
-        rm -f temp_file.ldif
-                return 0
-        fi
-
-}
 
 #Function to catch role of user
 function add_role {
@@ -113,13 +101,13 @@ function add_role {
         for word in ${words[@]}; do
 
                 if [[ "$word" == "SV"* ]]; then
-                        echo "uniqueMember: uid=$user,$BASE_DN" >> sv_role.ldif
+                        echo "uniqueMember: uid=$user,$BASE_DN" >> sv_role.$$.ldif
                         echo "$(date +"%Y-%m-%d %H:%M:%S") - User $user role Supervisor have been granted" >> "$LOG_FILE"
                 elif [[ "$word" == "ADM"* ]]; then
-                        echo "uniqueMember: uid=$user,$BASE_DN" >> adm_role.ldif
+                        echo "uniqueMember: uid=$user,$BASE_DN" >> adm_role.$$.ldif
                         echo "$(date +"%Y-%m-%d %H:%M:%S") - User $user role Administrator have been granted" >> "$LOG_FILE"
                 elif [[ "$word" == "AG"* ]]; then
-                        echo "uniqueMember: uid=$user,$BASE_DN" >> ag_role.ldif
+                        echo "uniqueMember: uid=$user,$BASE_DN" >> ag_role.$$.ldif
                         echo "$(date +"%Y-%m-%d %H:%M:%S") - User $user role Agent have been granted" >> "$LOG_FILE"
                 fi
 done
@@ -176,10 +164,9 @@ if [ $? -eq 1 ]; then
 fi
 
 # Check if user already exists
-user_in_ldap "$user"
-if [ $? -eq 1 ]; then
-        echo "$(date +"%Y-%m-%d %H:%M:%S") - User $user already exists in LDAP, skipping" >> "$LOG_FILE"
-        continue
+if echo $LDAP_USERS | grep -q $user;then
+         echo "$(date +"%Y-%m-%d %H:%M:%S") - User $user already exists in LDAP, skipping" >> "$LOG_FILE"
+         continue
 fi
 
 # Prepare file to add users
@@ -194,7 +181,7 @@ userPassword: $(slappasswd -s $password)
 shadowLastChange: $CHANGE_DATE
 plcomaltarPasswordHistory:
 description: $name $surname
-shadowInactive: -1\n" >> users.ldif
+shadowInactive: -1\n" >> users.$$.ldif
 
 # Log outpu to file
 echo "$(date +"%Y-%m-%d %H:%M:%S") - User $user add to LDAP" >> "$LOG_FILE"
@@ -208,12 +195,12 @@ done < $FILENAME
 #MAIN
 #################
 
-ldapadd -x -c -w "$LDAPPASS" -D $BIND_DN -f users.ldif > /dev/null 2>&1
+ldapadd -x -c -w "$LDAPPASS" -D $BIND_DN -f users.$$.ldif > /dev/null 2>&1
 
-ldapmodify -xc -w "$LDAPPASS" -D $BIND_DN -f adm_role.ldif > /dev/null 2>&1
-ldapmodify -xc -w "$LDAPPASS" -D $BIND_DN -f sv_role.ldif > /dev/null 2>&1
-ldapmodify -xc -w "$LDAPPASS" -D $BIND_DN -f ag_role.ldif > /dev/null 2>&1
+ldapmodify -xc -w "$LDAPPASS" -D $BIND_DN -f adm_role.$$.ldif > /dev/null 2>&1
+ldapmodify -xc -w "$LDAPPASS" -D $BIND_DN -f sv_role.$$.ldif > /dev/null 2>&1
+ldapmodify -xc -w "$LDAPPASS" -D $BIND_DN -f ag_role.$$.ldif > /dev/null 2>&1
 
-rm -f users.ldif && rm -f *_role.ldif
+rm -f *$$.ldif
 
 echo -e "\nUser addition process completed. Log saved to $LOG_FILE"
