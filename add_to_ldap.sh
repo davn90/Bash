@@ -24,15 +24,22 @@
 #
 #################################################
 
+# Filename parse in command line and check if it is in UTF-8 coding
+FILENAME=$1
+FILETYPE=$(file -b $1)
+
+if [[ "$FILETYPE" != "UTF-8 Unicode text"* ]]; then
+
+        echo "Program stopped, file is coded in different format than UTF-8"
+        echo "Please prepare the file with UTF-8 format"
+        exit 1
+fi
 
 # Define path for log
 LOG_FILE="ldap_user_add.log"
 
 # Create file to store users
 touch users.$$.ldif
-
-# Filename parse in command line
-FILENAME=$1
 
 # User list already in LDAP
 LDAP_USERS=$(slapcat | grep '\dn: uid=*')
@@ -46,6 +53,11 @@ BASE_DN="ou=People,o=ACC,o=Altar"
 BIND_DN="cn=Manager,o=Altar"
 ORGANIZATION="o=Altar"
 ROLES_GROUP="ou=ivr,ou=roles,o=ACC,o=Altar"
+
+# LDAP BACKUP
+mkdir LDAP_BACKUP$$
+slapcat -b $BIND_DN -l LDAP_BACKUP$$/backup.$$.ldif
+echo -e "\nLDAP was backup to path LDAP_BACKUP$$/backup.$$.ldif"
 
 # Check if file was given in parameter
 if [ ! -f "$FILENAME" ]; then
