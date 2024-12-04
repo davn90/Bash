@@ -82,11 +82,8 @@ fi
 # Add timezone setting to /usr2/www/html/acc/env2.php
 echo "Updating /usr2/www/html/acc/env2.php"
 if [ -f /usr2/www/html/acc/env2.php ]; then
-    # Add timezone setting at the beginning of the file
-    sed -i '1s/^/date_default_timezone_set("Europe\/Warsaw");\n/' /usr2/www/html/acc/env2.php
-
     # Add lines after "// stop PHP7.x"
-    awk '/\/\/ stop PHP7.x/ { print; print "// start PHP8.x"; print "define('\'DLUGI_ADRES\'', 0);"; print "// stop PHP8.x"; next }1' /usr2/www/html/acc/env2.php > /usr2/www/html/acc/env2.php.tmp
+    awk '/\/\/ stop PHP7.x/ { print; print "// start PHP8.x"; print "define('\'DLUGI_ADRES\'', 0);"; print "date_default_timezone_set("Europe/Warsaw")"; print "// stop PHP8.x"; next }1' /usr2/www/html/acc/env2.php > /usr2/www/html/acc/env2.php.tmp
     mv /usr2/www/html/acc/env2.php.tmp /usr2/www/html/acc/env2.php
 else
     echo "/usr2/www/html/acc/env2.php does not exist."
